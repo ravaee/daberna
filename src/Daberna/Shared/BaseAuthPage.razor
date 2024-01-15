@@ -1,0 +1,60 @@
+﻿@using Daberna.Services
+@using Daberna.Services.Interfaces
+@using Microsoft.AspNetCore.SignalR.Client
+@using Daberna.Events
+
+@code {
+    private HubConnection hubConnection;
+
+    [Inject] 
+    protected GeneralEvents Events { get; set; }
+
+    [Inject]
+    protected NavigationManager NavigationManager { get; set; } = null!;
+    
+    [Inject] 
+    protected UserInfoAccessor UserInfoAccessor { get; set; } = null!;
+    
+    [Inject] 
+    protected IGameService GameService { get; set; } = null!;
+
+    protected Action? OnGamesUpdated;
+    protected Action<Guid>? OnPlayersInGameChanged;
+
+    // protected async Task RegisterToSignalRHub()
+    // {
+    //     hubConnection = new HubConnectionBuilder()
+    //         .WithUrl(NavigationManager.ToAbsoluteUri("/gamehub"), options => {
+    //             options.UseDefaultCredentials = true;
+    //             options.HttpMessageHandlerFactory = (msg) =>
+    //             {
+    //                 if (msg is HttpClientHandler clientHandler)
+    //                 {
+    //                     clientHandler.ServerCertificateCustomValidationCallback +=
+    //                         (sender, certificate, chain, sslPolicyErrors) => { return true; };
+    //                 }
+    //                 
+    //                 return msg;
+    //             };
+    //         })
+    //         .Build();
+    //
+    //     hubConnection.On("GamesUpdated", () =>
+    //     {
+    //         if (OnGamesUpdated is not null)
+    //         {
+    //             OnGamesUpdated.Invoke();
+    //         }
+    //     });
+    //     
+    //     hubConnection.On<Guid>("GamePlayerChanged", (gameId) =>
+    //     {
+    //         if (OnPlayersInGameChanged is not null)
+    //         {
+    //             OnPlayersInGameChanged.Invoke(gameId);
+    //         }
+    //     });
+    //
+    //     await hubConnection.StartAsync();
+    // }
+}

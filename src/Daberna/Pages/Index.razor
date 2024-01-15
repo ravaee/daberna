@@ -1,0 +1,33 @@
+﻿@page "/"
+@using Daberna.Services
+@inherits IndexPage
+@* @attribute [Authorize] *@
+
+<PageTitle>Behrang</PageTitle>
+
+<div style="min-height: 30%; max-height: 30%;">
+    <h1>Hello, behrang!</h1>
+    <br>
+    <button type="button" class="btn btn-primary" onclick="@(async () => await OnCreateGameClicked())">
+        Create Game Room
+    </button>
+    <br>
+    <hr>
+    <h3>Games List</h3>
+</div>
+
+<div style="min-height: 70%; max-height: 70%;">
+
+    @foreach(var game in Model.Games)
+    {
+        <button type="button" class="btn btn-info" onclick="@(async () => await OnEnterGameRoomClicked(game.Id))">
+            Enter Game Room @game.Id
+        </button>
+        <br>
+    }
+</div>
+
+
+
+
+

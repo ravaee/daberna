@@ -1,0 +1,45 @@
+﻿@page "/game/{gameId}"
+@using Daberna.Domain
+@inherits GamePage
+
+<h1>Game Id: @Game?.Id</h1>
+<h2>Created BY @Game.Owner.Name</h2>
+
+<h2>Players:</h2>
+@{
+    foreach (var player in Game.Players)
+    {
+        <b>Name: @player.Name  |  Id: @player.Id</b>
+        <br/>
+    }
+}
+
+@{
+    var a = UserInfoAccessor.GetCurrentUser().Result.Id;
+    
+    if (Game.Owner.Id == a)
+    {
+        <button type="button" class="btn btn-info" onclick="@(async () => await OnStartGameClicked(Game.Id))">
+            start game
+        </button>
+    }
+}
+
+<h3>Game</h3>
+<hr/>
+<div class="stone-container">
+    @for (int i = Game.CurrentStones.Count - 1; i >= 0; i--)
+    {
+        <div class="stone @(i == Game.CurrentStones.Count - 1 ? "large-stone new-stone" : "small-stone slide-right")">
+            @Game.CurrentStones.ElementAt(i).Number
+        </div>
+    }
+</div>
+<hr/>
+
+@code {
+
+}
+
+
+

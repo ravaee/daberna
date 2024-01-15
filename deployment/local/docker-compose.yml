@@ -1,0 +1,17 @@
+version: '3.3'
+
+services:
+  mssql:
+    container_name: daberna-db
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: always
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Mmgrdd211!"
+    ports:
+      - 1433:1433
+    volumes:
+      - daberna-vol:/var/opt/mssql
+      
+volumes:
+  daberna-vol:
