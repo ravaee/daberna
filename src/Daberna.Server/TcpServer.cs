@@ -7,8 +7,8 @@ using Newtonsoft.Json;
 class ChatServerCustom
 {
     private TcpListener listener;
-    private ConcurrentDictionary<Guid, Player> players = new();
-    private ConcurrentDictionary<Guid, Game> games = new();
+    private ConcurrentDictionary<Guid, Player> Players = new();
+    private ConcurrentDictionary<Guid, Game> Games = new();
 
     public ChatServerCustom()
     {
@@ -34,13 +34,13 @@ class ChatServerCustom
             listener.Stop();
         }
     }
+
     private void HandleClient(object obj)
     {
         TcpClient client = (TcpClient)obj;
         var stream = client.GetStream();
         StreamReader reader = new StreamReader(stream);
         StreamWriter writer = new StreamWriter(stream) { AutoFlush = true };
-
 
         try
         {
@@ -53,30 +53,38 @@ class ChatServerCustom
                 client = client
             };
 
-            players.TryAdd(player.Id, player);
+            Players.TryAdd(player.Id, player);
             Console.WriteLine($"{player.Name} with Id: {player.Id} connected.");
 
-            // Send the playerId back to the client
             writer.WriteLine(playerId.ToString());
 
             string input;
-            
+
             while ((input = reader.ReadLine()) != null)
             {
-                var sharedObject = JsonConvert.DeserializeObject<SharedObject>(input);
+                var messageObject = JsonConvert.DeserializeObject<MessageObject>(input, new JsonSerializerSettings
+                {
+                    TypeNameHandling = TypeNameHandling.Auto
+                });
 
-                switch (sharedObject.MessageType)
+                switch (messageObject.MessageType)
                 {
                     case MessageType.PrivateMessage:
-                        SendPrivateMessage(sharedObject.DestinationPlayerId, sharedObject.Message);
+                        PrivateMessage privateMessage = (PrivateMessage)messageObject.MessageContract;
+                        SendPrivateMessage(privateMessage);
                         break;
                     case MessageType.BroadCastMessage:
-                        BroadcastMessage(sharedObject.Message);
+                        BroadcastMessage broadcastMessage = (BroadcastMessage)messageObject.MessageContract;
+                        BroadcastMessage(broadcastMessage);
                         break;
                     case MessageType.CreateGame:
-                        CreateNewGame(sharedObject);
+                        CreateGame createGame = (CreateGame)messageObject.MessageContract;
+                        CreateNewGame(createGame);
                         break;
-                    // ... handle other cases ...
+                    case MessageType.GetGames:
+                        GetAllGames getAllGames = (GetAllGames)messageObject.MessageContract;
+                        SendAllGamesToPlayer(getAllGames);
+                        break;
                 }
             }
         }
@@ -86,39 +94,180 @@ class ChatServerCustom
         }
     }
 
-    private void CreateNewGame(SharedObject sharedObject)
+    private void SendAllGamesToPlayer(GetAllGames getAllGames)
     {
-        Game game = new Game();
+        var messageObject = new MessageObject
+        {
+            MessageType = MessageType.GetGames,
+            MessageStatus = MessageStatus.Done,
+            MessageContract = new GetAllGames
+            {
+                Games = Games.Values.ToList(),
+                SenderId = Guid.Empty
+            }
+        };
 
-        games.TryAdd(game.Id, game);
-    }
+        var settings = new JsonSerializerSettings();
 
-    private void SendPrivateMessage(Guid id, string message)
-    {
-        if (players.TryGetValue(id, out Player player))
+        settings.Converters.Add(new IPAddressConverter());
+        settings.TypeNameHandling = TypeNameHandling.All;
+
+        string json = JsonConvert.SerializeObject(messageObject, settings);
+
+        if (Players.TryGetValue(getAllGames.SenderId, out Player player))
         {
             StreamWriter writer = new StreamWriter(player.client.GetStream()) { AutoFlush = true };
-            writer.WriteLine(message);
+
+            writer.WriteLine(json);
         }
     }
-    private void BroadcastMessage(string message)
+
+    private void SendAllGamesToAllPlayers()
     {
-        foreach (var player in players.Values)
+        MessageObject messageObject = new MessageObject
+        {
+            MessageType = MessageType.GetGames,
+            MessageStatus = MessageStatus.Done,
+            MessageContract = new GetAllGames
+            {
+                Games = Games.Values.ToList(),
+                SenderId = Guid.Empty
+            }
+        };
+
+        var settings = new JsonSerializerSettings();
+
+        settings.Converters.Add(new IPAddressConverter());
+        settings.TypeNameHandling = TypeNameHandling.All;
+
+        string json = JsonConvert.SerializeObject(messageObject, settings);
+
+        foreach (var player in Players.Values)
         {
             StreamWriter writer = new StreamWriter(player.client.GetStream()) { AutoFlush = true };
-            writer.WriteLine(message);
+
+            writer.WriteLine(json);
         }
     }
-    private void SendGroupMessage(string players, string message)
+
+    private void CreateNewGame(CreateGame createGame)
     {
-        var groupMembers = players.Split(',');
-        foreach (var member in groupMembers)
+        try
         {
-            if (this.players.TryGetValue(Guid.Parse(member), out Player? player))
+            Players.TryGetValue(createGame.SenderId, out var player);
+
+            if (player is null)
+                return;
+
+            Game game = new Game
+            {
+                Id = Guid.NewGuid(),
+                Name = createGame.GameName ?? "GameName",
+                Status = GameStatus.Created,
+                Players = new List<Player>
+                {
+                    player
+                }
+            };
+
+            Games.TryAdd(game.Id, game);
+
+            SendAllGamesToAllPlayers();
+        }
+        catch (Exception e)
+        {
+            SendPrivateMessage(new PrivateMessage
+            {
+                SenderId = Guid.Empty,
+                Message = e.Message,
+                ReciverId = createGame.SenderId
+            });
+        }
+    }
+
+    private void SendPrivateMessage(PrivateMessage privateMessage)
+    {
+        SendMessageToPlayer(
+            privateMessage.ReciverId,
+            privateMessage,
+            MessageType.PrivateMessage,
+            MessageStatus.Done);
+    }
+
+    private void BroadcastMessage(BroadcastMessage broadcastMessage)
+    {
+        SendMessageToAll(
+            broadcastMessage,
+            MessageType.BroadCastMessage,
+            MessageStatus.Done);
+    }
+
+    private void SendMessageToPlayer(
+        Guid playerId,
+        MessageContract messageContract,
+        MessageType messageType,
+        MessageStatus messageStatus)
+    {
+        try
+        {
+            var messageObject = new MessageObject
+            {
+                MessageType = messageType,
+                MessageStatus = messageStatus,
+                MessageContract = messageContract
+            };
+
+            string json = JsonConvert.SerializeObject(messageObject, new JsonSerializerSettings
+            {
+                TypeNameHandling = TypeNameHandling.All
+            });
+
+            if (Players.TryGetValue(playerId, out Player player))
             {
                 StreamWriter writer = new StreamWriter(player.client.GetStream()) { AutoFlush = true };
-                writer.WriteLine(message);
+
+                writer.WriteLine(json);
             }
+            else
+            {
+                throw new Exception("No player exist");
+            }
+        }
+        catch (Exception e)
+        {
+            throw new Exception("Could not send message to Player", e);
+        }
+    }
+
+    private void SendMessageToAll(
+        MessageContract messageContract,
+        MessageType messageType,
+        MessageStatus messageStatus)
+    {
+        try
+        {
+            var messageObject = new MessageObject
+            {
+                MessageType = messageType,
+                MessageStatus = messageStatus,
+                MessageContract = messageContract
+            };
+
+            string json = JsonConvert.SerializeObject(messageObject, new JsonSerializerSettings
+            {
+                TypeNameHandling = TypeNameHandling.All
+            });
+
+            foreach (var player in Players.Values)
+            {
+                StreamWriter writer = new StreamWriter(player.client.GetStream()) { AutoFlush = true };
+
+                writer.WriteLine(json);
+            }
+        }
+        catch (Exception e)
+        {
+            throw new Exception("Could not send message to Player", e);
         }
     }
 }

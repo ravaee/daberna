@@ -37,7 +37,7 @@ class ChatClient
             Console.WriteLine("Enter your message: ");
             string message = Console.ReadLine();
             
-            var sharedObject = new SharedObject
+            var sharedObject = new MessageObject
             {
                 Message = message,
                 MessageType = MessageType.BroadCastMessage,
